@@ -131,6 +131,14 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .audio-banner b{color:#1a0a00;}
 .audio-banner .close{float:right;background:none;border:none;color:#5c4400;cursor:pointer;font-size:16px;line-height:1;margin-left:8px;padding:0;}
 
+/* Voice picker bar (shown when at least one Tamil voice is installed) */
+.voice-bar{display:none;background:#f5ead7;border-top:1px solid #ead49a;border-bottom:1px solid #ead49a;padding:6px 12px;font-size:11px;color:#5c4400;align-items:center;gap:8px;flex-shrink:0;}
+.voice-bar.on{display:flex;}
+.voice-bar .v-lbl{font-weight:700;color:#1a0a00;letter-spacing:.04em;}
+.voice-bar select{flex:1;min-width:0;font-size:11px;padding:4px 6px;border:1px solid #ead49a;border-radius:6px;background:#fff;color:#1a0a00;}
+.voice-bar .test{background:#b8211d;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.04em;flex-shrink:0;}
+.voice-bar .test:hover{background:#8a1714;}
+
 /* Inline vocab row layout adjusts for button */
 .vocab-row .left{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0;}
 .vocab-row .left .col{flex:1;min-width:0;}
@@ -256,6 +264,12 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 </section>
 
 </main>
+
+<div class="voice-bar" id="voice-bar">
+  <span class="v-lbl">Voice</span>
+  <select id="voice-select" onchange="setVoice(this.value)" aria-label="Tamil voice"></select>
+  <button class="test" onclick="testVoice()" type="button">Test</button>
+</div>
 
 <nav class="tabs">
   <button class="tab on" data-scr="lessons" onclick="showScreen('lessons')"><span class="tab-glyph">Aa</span><span class="tab-lbl">Lessons</span></button>
@@ -548,16 +562,65 @@ const KURAL = [{"number":1,"tamil":"அகர முதல எழுத்தெ
 let TA_VOICE = null;
 let TA_VOICE_OK = false;
 
+// Higher score = preferred. Network/neural voices win over compact/legacy.
+function voiceScore(v){
+  const n = (v.name || '').toLowerCase();
+  let s = 0;
+  if(n.includes('google')) s += 25;
+  if(n.includes('microsoft')) s += 18;
+  if(n.includes('neural')) s += 14;
+  if(n.includes('natural')) s += 12;
+  if(n.includes('premium')) s += 12;
+  if(n.includes('enhanced')) s += 10;
+  if(n.includes('online')) s += 8;
+  if(n.includes('compact')) s -= 8;
+  if(n.includes('legacy')) s -= 8;
+  if(n.includes('novelty')) s -= 20;
+  if(v.lang === 'ta-IN') s += 3;
+  if(v.localService === false) s += 4;  // network voices usually richer
+  return s;
+}
+
+function listTamilVoices(){
+  if(typeof speechSynthesis === 'undefined') return [];
+  return speechSynthesis.getVoices().filter(v=>v.lang && v.lang.toLowerCase().startsWith('ta'));
+}
+
 function pickTamilVoice(){
   if(typeof speechSynthesis === 'undefined') return;
-  const voices = speechSynthesis.getVoices();
-  TA_VOICE = voices.find(v=>v.lang==='ta-IN')
-          || voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('ta'))
-          || null;
-  TA_VOICE_OK = !!TA_VOICE;
+  const cands = listTamilVoices();
+  if(cands.length){
+    cands.sort((a,b)=>voiceScore(b)-voiceScore(a));
+    // Respect saved preference if still available
+    let saved = null;
+    try{ saved = localStorage.getItem('ts_ta_voice'); }catch(e){}
+    const savedVoice = saved && cands.find(v=>v.name===saved);
+    TA_VOICE = savedVoice || cands[0];
+    TA_VOICE_OK = true;
+  } else {
+    TA_VOICE = null;
+    TA_VOICE_OK = false;
+  }
+  updateVoiceUi();
+}
+
+function updateVoiceUi(){
+  const cands = listTamilVoices();
+  const bar = document.getElementById('voice-bar');
   const banner = document.getElementById('audio-banner');
-  if(banner){
-    if(!TA_VOICE_OK){
+  const sel = document.getElementById('voice-select');
+  if(cands.length && bar && sel){
+    cands.sort((a,b)=>voiceScore(b)-voiceScore(a));
+    sel.innerHTML = cands.map(v=>{
+      const name = v.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      const sel = TA_VOICE && v.name===TA_VOICE.name ? ' selected' : '';
+      return `<option value="${name}"${sel}>${name} · ${v.lang}</option>`;
+    }).join('');
+    bar.classList.add('on');
+    if(banner) banner.classList.remove('on');
+  } else {
+    if(bar) bar.classList.remove('on');
+    if(banner){
       const ua = navigator.userAgent || '';
       const instr = document.getElementById('audio-instr');
       if(instr){
@@ -572,10 +635,20 @@ function pickTamilVoice(){
         }
       }
       banner.classList.add('on');
-    } else {
-      banner.classList.remove('on');
     }
   }
+}
+
+function setVoice(name){
+  const v = listTamilVoices().find(v=>v.name===name);
+  if(v){
+    TA_VOICE = v;
+    try{ localStorage.setItem('ts_ta_voice', v.name); }catch(e){}
+  }
+}
+
+function testVoice(){
+  speak('வணக்கம், தமிழ் கற்போம்.');
 }
 
 if(typeof speechSynthesis !== 'undefined'){
@@ -589,14 +662,29 @@ function speak(text, btn){
   speechSynthesis.cancel();
   document.querySelectorAll('.spk.playing').forEach(b=>b.classList.remove('playing'));
   if(wasPlaying) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ta-IN';
-  if(TA_VOICE) u.voice = TA_VOICE;
-  u.rate = 0.85;
-  u.onend = ()=>{ if(btn) btn.classList.remove('playing'); };
-  u.onerror = ()=>{ if(btn) btn.classList.remove('playing'); };
+
+  // Split multi-line text (e.g. Kural couplets) into separate utterances —
+  // sounds far more natural than one utterance with embedded \n pauses.
+  const lines = String(text).split(/\n+/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return;
   if(btn) btn.classList.add('playing');
-  speechSynthesis.speak(u);
+
+  // Defer slightly so cancel() fully settles (iOS Safari quirk).
+  setTimeout(()=>{
+    lines.forEach((line, i)=>{
+      const u = new SpeechSynthesisUtterance(line);
+      u.lang = 'ta-IN';
+      if(TA_VOICE) u.voice = TA_VOICE;
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+      if(i === lines.length - 1){
+        u.onend = ()=>{ if(btn) btn.classList.remove('playing'); };
+        u.onerror = ()=>{ if(btn) btn.classList.remove('playing'); };
+      }
+      speechSynthesis.speak(u);
+    });
+  }, 40);
 }
 
 function spkBtn(text){
