@@ -1,0 +1,7 @@
+# Intermediate build artifacts (regenerable)
+_template.html
+_tirukkural.json
+
+# OS / editor
+.DS_Store
+*.swp
