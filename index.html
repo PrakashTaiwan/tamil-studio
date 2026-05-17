@@ -137,6 +137,8 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .voice-bar select{flex:1;min-width:120px;font-size:11px;padding:4px 6px;border:1px solid #ead49a;border-radius:6px;background:#fff;color:#1a0a00;}
 .voice-bar .test{background:#b8211d;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.04em;flex-shrink:0;}
 .voice-bar .test:hover{background:#8a1714;}
+.voice-bar .a-status{font-size:10px;color:#8a6f30;letter-spacing:.04em;flex-shrink:0;font-style:italic;}
+.voice-bar .a-status.err{color:#b8211d;font-style:normal;font-weight:600;}
 
 .src-toggle{display:inline-flex;border:1px solid #ead49a;border-radius:6px;overflow:hidden;flex-shrink:0;}
 .src-toggle button{background:#fff;color:#5c4400;border:none;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;border-right:1px solid #ead49a;}
@@ -325,6 +327,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
   </div>
   <select id="voice-select" onchange="setVoice(this.value)" aria-label="Tamil device voice"></select>
   <button class="test" onclick="testVoice()" type="button">Test</button>
+  <span class="a-status" id="audio-status"></span>
 </div>
 
 <nav class="tabs">
@@ -630,26 +633,29 @@ const READ_VOWELS = [
   {ta:"ஔ", say:"ஔ", tr:"au",  note:"diphthong, as in 'cow'"},
 ];
 
-// 18 consonants — மெய் எழுத்துகள் (shown with pulli; spoken with implicit 'a' so engine has something to say)
+// 18 consonants — மெய் எழுத்துகள் (shown with புள்ளி; spoken with leading 'இ'
+// to give the consonant audible context, the way Tamil school primers teach
+// them — "இக், இங், இச், ..." — so a pure consonant sounds distinctly different
+// from its vowel-attached form (க, ங, ச, ...).
 const READ_CONSONANTS = [
-  {ta:"க்", say:"க", tr:"k",  note:"k/g, hard"},
-  {ta:"ங்", say:"ங", tr:"ng", note:"ng as in 'sing'"},
-  {ta:"ச்", say:"ச", tr:"ch", note:"ch/s"},
-  {ta:"ஞ்", say:"ஞ", tr:"ny", note:"ny as in 'canyon'"},
-  {ta:"ட்", say:"ட", tr:"ṭ",  note:"retroflex t (tongue curled)"},
-  {ta:"ண்", say:"ண", tr:"ṇ",  note:"retroflex n"},
-  {ta:"த்", say:"த", tr:"th", note:"soft th as in 'the'"},
-  {ta:"ந்", say:"ந", tr:"n",  note:"dental n"},
-  {ta:"ப்", say:"ப", tr:"p",  note:"p/b"},
-  {ta:"ம்", say:"ம", tr:"m",  note:"m as in 'mom'"},
-  {ta:"ய்", say:"ய", tr:"y",  note:"y as in 'yes'"},
-  {ta:"ர்", say:"ர", tr:"r",  note:"rolled r"},
-  {ta:"ல்", say:"ல", tr:"l",  note:"dental l"},
-  {ta:"வ்", say:"வ", tr:"v",  note:"v/w"},
-  {ta:"ழ்", say:"ழ", tr:"zh", note:"unique Tamil sound — tongue curled, between r and l"},
-  {ta:"ள்", say:"ள", tr:"ḷ",  note:"retroflex l (hard l)"},
-  {ta:"ற்", say:"ற", tr:"ṟ",  note:"hard trilled r"},
-  {ta:"ன்", say:"ன", tr:"ṉ",  note:"alveolar n"},
+  {ta:"க்", say:"இக்", tr:"k",  note:"k/g, hard"},
+  {ta:"ங்", say:"இங்", tr:"ng", note:"ng as in 'sing'"},
+  {ta:"ச்", say:"இச்", tr:"ch", note:"ch/s"},
+  {ta:"ஞ்", say:"இஞ்", tr:"ny", note:"ny as in 'canyon'"},
+  {ta:"ட்", say:"இட்", tr:"ṭ",  note:"retroflex t (tongue curled)"},
+  {ta:"ண்", say:"இண்", tr:"ṇ",  note:"retroflex n"},
+  {ta:"த்", say:"இத்", tr:"th", note:"soft th as in 'the'"},
+  {ta:"ந்", say:"இந்", tr:"n",  note:"dental n"},
+  {ta:"ப்", say:"இப்", tr:"p",  note:"p/b"},
+  {ta:"ம்", say:"இம்", tr:"m",  note:"m as in 'mom'"},
+  {ta:"ய்", say:"இய்", tr:"y",  note:"y as in 'yes'"},
+  {ta:"ர்", say:"இர்", tr:"r",  note:"rolled r"},
+  {ta:"ல்", say:"இல்", tr:"l",  note:"dental l"},
+  {ta:"வ்", say:"இவ்", tr:"v",  note:"v/w"},
+  {ta:"ழ்", say:"இழ்", tr:"zh", note:"unique Tamil sound — tongue curled, between r and l"},
+  {ta:"ள்", say:"இள்", tr:"ḷ",  note:"retroflex l (hard l)"},
+  {ta:"ற்", say:"இற்", tr:"ṟ",  note:"hard trilled r"},
+  {ta:"ன்", say:"இன்", tr:"ṉ",  note:"alveolar n"},
 ];
 
 // Vowel-sign demo — how க combines with each of the 12 vowels (the உயிர்மெய் pattern)
@@ -765,7 +771,27 @@ try { const s = localStorage.getItem('ts_audio_src'); if(s==='google' || s==='de
 
 let CURRENT_AUDIO = null;  // currently-playing <audio> element
 
-const GOOGLE_TTS_BASE = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=ta&client=tw-ob&q=';
+// Google needs total/idx/textlen for the request to be accepted reliably —
+// these are how translate.google.com calls it internally.
+function googleTtsUrl(text, idx, total){
+  const params = new URLSearchParams({
+    ie: 'UTF-8',
+    q: text,
+    tl: 'ta',
+    total: String(total),
+    idx: String(idx),
+    textlen: String(text.length),
+    client: 'tw-ob',
+  });
+  return 'https://translate.google.com/translate_tts?' + params.toString();
+}
+
+function setAudioStatus(text, isError){
+  const el = document.getElementById('audio-status');
+  if(!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('err', !!isError);
+}
 
 // Device-voice quality scoring
 function voiceScore(v){
@@ -900,29 +926,44 @@ function speakGoogle(text, btn){
   const chunks = chunkForTts(text);
   if(!chunks.length) return;
   if(btn) btn.classList.add('playing');
+  setAudioStatus('Online…');
   let i = 0;
+  let firstByteOk = false;
+  let resolved = false;  // one-shot guard: prevents both onerror and play().catch()
+                         // from each triggering a fallback for the same failure.
+
+  const fallback = (reason)=>{
+    if(resolved) return;
+    resolved = true;
+    console.warn('Google TTS fallback:', reason);
+    const remaining = chunks.slice(i).join(' ');
+    CURRENT_AUDIO = null;
+    if(btn) btn.classList.remove('playing');
+    setAudioStatus('Online failed → Device', true);
+    speakDevice(remaining, btn);
+  };
+
   const playNext = ()=>{
+    if(resolved) return;
     if(i >= chunks.length){
+      resolved = true;
       if(btn) btn.classList.remove('playing');
       CURRENT_AUDIO = null;
+      setAudioStatus('Online ✓');
       return;
     }
-    const a = new Audio(GOOGLE_TTS_BASE + encodeURIComponent(chunks[i]));
+    const a = new Audio();
+    a.preload = 'auto';
+    a.crossOrigin = 'anonymous';
+    a.src = googleTtsUrl(chunks[i], i, chunks.length);
     CURRENT_AUDIO = a;
-    a.onended = ()=>{ i++; playNext(); };
-    a.onerror = ()=>{
-      console.warn('Google TTS failed; falling back to device for remaining text.');
-      const remaining = chunks.slice(i).join(' ');
-      CURRENT_AUDIO = null;
-      if(btn) btn.classList.remove('playing');
-      speakDevice(remaining, btn);
-    };
-    a.play().catch(()=>{
-      console.warn('Google TTS play() rejected; falling back to device.');
-      const remaining = chunks.slice(i).join(' ');
-      CURRENT_AUDIO = null;
-      if(btn) btn.classList.remove('playing');
-      speakDevice(remaining, btn);
+    a.onended = ()=>{ if(!resolved){ i++; playNext(); } };
+    a.onerror = ()=>fallback('audio error event');
+    a.oncanplay = ()=>{ firstByteOk = true; };
+    a.play().then(()=>{ firstByteOk = true; }).catch((err)=>{
+      // Only fall back on play() rejection if the audio never even buffered.
+      // (Some browsers reject play() with autoplay errors even when audio is fine.)
+      if(!firstByteOk) fallback('play() rejected: ' + err.message);
     });
   };
   playNext();
@@ -933,6 +974,7 @@ function speakDevice(text, btn){
   const lines = String(text).split(/\n+/).map(l=>l.trim()).filter(Boolean);
   if(!lines.length) return;
   if(btn) btn.classList.add('playing');
+  if(AUDIO_SOURCE === 'device') setAudioStatus('Device');
   setTimeout(()=>{
     lines.forEach((line, i)=>{
       const u = new SpeechSynthesisUtterance(line);
