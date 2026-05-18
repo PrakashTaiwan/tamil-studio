@@ -617,20 +617,24 @@ const SCENARIOS = [
 
 /* ============ SCRIPT / READING ============ */
 
-// 12 vowels — உயிர் எழுத்துகள்
+// 12 vowels — உயிர் எழுத்துகள்.
+// Audio plays each vowel's traditional Tamil grammar name (அகரம், ஆகாரம், …);
+// every name STARTS with the pure vowel sound, so the learner hears the right
+// phoneme first while the TTS engine has a real word to render accurately.
+// Short vowels take the "-கரம்" suffix; long vowels and diphthongs take "-காரம்".
 const READ_VOWELS = [
-  {ta:"அ", say:"அ", tr:"a",   note:"short 'a' as in 'America'"},
-  {ta:"ஆ", say:"ஆ", tr:"aa",  note:"long 'aa' as in 'father'"},
-  {ta:"இ", say:"இ", tr:"i",   note:"short 'i' as in 'it'"},
-  {ta:"ஈ", say:"ஈ", tr:"ii",  note:"long 'ee' as in 'bee'"},
-  {ta:"உ", say:"உ", tr:"u",   note:"short 'u' as in 'put'"},
-  {ta:"ஊ", say:"ஊ", tr:"uu",  note:"long 'oo' as in 'boot'"},
-  {ta:"எ", say:"எ", tr:"e",   note:"short 'e' as in 'pet'"},
-  {ta:"ஏ", say:"ஏ", tr:"ee",  note:"long 'ay' as in 'bay'"},
-  {ta:"ஐ", say:"ஐ", tr:"ai",  note:"diphthong, as in 'aisle'"},
-  {ta:"ஒ", say:"ஒ", tr:"o",   note:"short 'o' as in 'pot'"},
-  {ta:"ஓ", say:"ஓ", tr:"oo",  note:"long 'o' as in 'go'"},
-  {ta:"ஔ", say:"ஔ", tr:"au",  note:"diphthong, as in 'cow'"},
+  {ta:"அ", say:"அகரம்",   tr:"a",  note:"short 'a' as in 'America'"},
+  {ta:"ஆ", say:"ஆகாரம்",  tr:"ā",  note:"long 'aa' as in 'father'"},
+  {ta:"இ", say:"இகரம்",   tr:"i",  note:"short 'i' as in 'it'"},
+  {ta:"ஈ", say:"ஈகாரம்",  tr:"ī",  note:"long 'ee' as in 'bee'"},
+  {ta:"உ", say:"உகரம்",   tr:"u",  note:"short 'u' as in 'put'"},
+  {ta:"ஊ", say:"ஊகாரம்",  tr:"ū",  note:"long 'u' as in 'boot'"},
+  {ta:"எ", say:"எகரம்",   tr:"e",  note:"short 'e' as in 'pet'"},
+  {ta:"ஏ", say:"ஏகாரம்",  tr:"ē",  note:"long 'e' as in 'bay'"},
+  {ta:"ஐ", say:"ஐகாரம்",  tr:"ai", note:"diphthong, as in 'aisle'"},
+  {ta:"ஒ", say:"ஒகரம்",   tr:"o",  note:"short 'o' as in 'pot'"},
+  {ta:"ஓ", say:"ஓகாரம்",  tr:"ō",  note:"long 'o' as in 'go'"},
+  {ta:"ஔ", say:"ஔகாரம்",  tr:"au", note:"diphthong, as in 'cow'"},
 ];
 
 // 18 consonants — மெய் எழுத்துகள் (shown with புள்ளி; spoken with leading 'இ'
@@ -1089,7 +1093,7 @@ function renderRead(){
   if(lvl === 'vowels'){
     body.innerHTML = `
       <div class="read-hint">
-        <b>Vowels (உயிர் எழுத்துகள்):</b> 12 letters. Tamil has short/long vowel pairs — the long version is just the short one held longer. Tap each letter to hear it.
+        <b>Vowels (உயிர் எழுத்துகள்):</b> 12 letters in short/long pairs (the long version is the short one held longer) plus two diphthongs. Audio plays each vowel's traditional name — <b class="ta">அகரம், ஆகாரம், இகரம், ஈகாரம், …</b> — which begins with the pure vowel sound itself.
       </div>
       <div class="letter-grid">${READ_VOWELS.map(letterTile).join('')}</div>
     `;
